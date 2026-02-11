@@ -1,8 +1,32 @@
 import java.util.EmptyStackException;
 
+interface Comparator<T> {
+    int compare(T a, T b);
+}
+
+class DynamicComparator<T> {
+    private Comparator<T> comp;
+
+    DynamicComparator(Comparator<T> comp) {
+        this.comp = comp;
+    }
+
+    public int compare(T a, T b) {
+        return comp.compare(a, b);
+    }
+}
+
 public class Main {
     public static void main(String[] args) {
-        MyArrayList<Integer> arr = new MyArrayList<>();
+        Comparator<Integer> intComparator = new Comparator<Integer>() {
+            @Override
+            public int compare(Integer a, Integer b) {
+                return a - b; 
+            }
+        };
+
+        MyArrayList<Integer> arr = new MyArrayList<>(intComparator);
+
         arr.add(5);
         arr.add(3);
         arr.add(8);
@@ -34,120 +58,124 @@ public class Main {
         System.out.println("Size after pop: " + arr.len());
     }
 
-    static class MyArrayList<T extends Comparable<T>> {
+
+    static class MyArrayList<T> {
+
         private T[] data;
         private int size;
-        private int maxLength = 100000;
+        private int capacity;
         private boolean isSorted = false;
+        
+        private Comparator<T> comparator;
+        
+        MyArrayList(Comparator<T> comp) {
+            this.capacity = 10;
+            this.data = newArray(capacity);
+            this.size = 0;
+            this.comparator = comp;
+        }
 
-        MyArrayList() {
-            data = (T[]) new Comparable[maxLength];
-            size = 0;
+        @SuppressWarnings("unchecked")
+        private T[] newArray(int cap) {
+            return (T[]) new Object[cap];
         }
 
         public void add(T val) {
-            if (size == maxLength) resize();
+            if (size == capacity)
+                resize();
             data[size++] = val;
             isSorted = false;
         }
 
         public T get(int idx) {
-            return this.data[idx];
+            if (idx < 0 || idx >= size)
+                throw new IndexOutOfBoundsException();
+            return data[idx];
+        }
+
+        public int len() {
+            return size;
         }
 
         public boolean isEmpty() {
-            return this.size == 0;
+            return size == 0;
+        }
+
+        public T pop_back() {
+            if (isEmpty())
+                throw new EmptyStackException();
+
+            T val = data[--size];
+            data[size] = null;
+            return val;
         }
 
         public int search(T val) {
             if (isSorted) {
                 int l = 0, r = size - 1;
                 while (l <= r) {
-                    int m = (l + r) / 2;
-                    if (data[m].equals(val)) return m;
-                    else if (data[m].compareTo(val) < 0) l = m + 1;
+                    int m = l + (r - l) / 2;
+                    
+                    int cmp = comparator.compare(data[m], val);
+
+                    if (cmp == 0) return m;
+                    if (cmp < 0) l = m + 1;
                     else r = m - 1;
                 }
                 return -1;
             }
 
             for (int i = 0; i < size; i++) {
-                if (data[i].equals(val)) return i;
+                if (data[i].equals(val))
+                    return i;
             }
             return -1;
         }
 
-        public T pop_back() {
-            if (isEmpty()) throw new EmptyStackException();
-            T item = data[size - 1];
-            data[size - 1] = null;
-            size--;
-            return item;
-        }
-
-        void merge(T a[], int l, int m, int r) {
-            int n1 = m - l + 1;
-            int n2 = r - m;
-
-            T L[] = (T[]) new Comparable[n1];
-            T R[] = (T[]) new Comparable[n2];
-
-            for (int i = 0; i < n1; ++i)
-                L[i] = a[l + i];
-
-            for (int j = 0; j < n2; ++j)
-                R[j] = a[m + 1 + j];
-
-            int i = 0, j = 0;
-
-            int k = l;
-            while (i < n1 && j < n2) {
-                if (L[i].compareTo(R[j]) <= 0) {
-                    a[k] = L[i];
-                    i++;
-                } else {
-                    a[k] = R[j];
-                    j++;
-                }
-                k++;
-            }
-
-            while (i < n1) {
-                a[k] = L[i];
-                i++;
-                k++;
-            }
-
-            while (j < n2) {
-                a[k] = R[j];
-                j++;
-                k++;
-            }
-        }
-
-        void sort(int l, int r) {
+        public void sort(int l, int r) {
             if (l < r) {
-                int m = (l + r) / 2;
-
+                int m = l + (r - l) / 2;
                 sort(l, m);
                 sort(m + 1, r);
-                
-                merge(data, l, m, r);
+                merge(l, m, r);
                 isSorted = true;
             }
         }
 
-        private void resize() {
-            int newLength = maxLength * 2;
-            T[] newData = (T[]) new Comparable[newLength];
+        private void merge(int l, int m, int r) {
+            int n1 = m - l + 1;
+            int n2 = r - m;
 
-            for (int i = 0; i < size; i++) newData[i] = data[i];
-            maxLength = newLength;
-            data = newData;
+            T[] L = newArray(n1);
+            T[] R = newArray(n2);
+
+            for (int i = 0; i < n1; i++)
+                L[i] = data[l + i];
+            for (int j = 0; j < n2; j++)
+                R[j] = data[m + 1 + j];
+
+            int i = 0, j = 0, k = l;
+
+            while (i < n1 && j < n2) {                
+                if (comparator.compare(L[i], R[j]) <= 0)
+                    data[k++] = L[i++];
+                else
+                    data[k++] = R[j++];
+            }
+
+            while (i < n1)
+                data[k++] = L[i++];
+
+            while (j < n2)
+                data[k++] = R[j++];
         }
 
-        public int len() {
-            return this.size;
+        private void resize() {
+            capacity *= 2;
+            T[] newData = newArray(capacity);
+            for (int i = 0; i < size; i++)
+                newData[i] = data[i];
+            data = newData;
         }
     }
 }
